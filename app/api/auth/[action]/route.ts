@@ -3,6 +3,17 @@ import { createUser, getUserByName } from "@/backend/repository";
 import { createSession, hashPassword, verifyPassword } from "@/backend/security";
 
 const cookieOptions = { httpOnly: true, sameSite: "strict" as const, secure: process.env.NODE_ENV === "production", path: "/" };
+
+function extractErrorMessage(error: unknown): string {
+  if (typeof error === "string") return error;
+  if (error && typeof error === "object") {
+    if ("message" in error && typeof (error as any).message === "string") {
+      return (error as any).message;
+    }
+  }
+  return "Unable to authenticate.";
+}
+
 export async function POST(request: Request, { params }: { params: Promise<{ action: string }> }) {
   const { action } = await params;
   if (action === "logout") { const response = NextResponse.json({ ok: true }); response.cookies.set("dailyarc_session", "", { ...cookieOptions, maxAge: 0 }); return response; }
@@ -14,6 +25,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ act
     const user = action === "register" ? await createUser(name, await hashPassword(password)) : await getUserByName(name);
     if (!user || (action === "login" && !user.passwordHash)) return NextResponse.json({ error: "Invalid display name or password." }, { status: 401 });
     if (action === "login" && !(await verifyPassword(password, user.passwordHash!))) return NextResponse.json({ error: "Invalid display name or password." }, { status: 401 });
-    const session = createSession(user.id); const response = NextResponse.json({ user: { id: user.id, name: user.name } }); response.cookies.set("dailyarc_session", session.value, { ...cookieOptions, maxAge: session.maxAge }); return response;
-  } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to authenticate." }, { status: 400 }); }
+    const session = createSession(user.id);
+    const response = NextResponse.json({ user: { id: user.id, name: user.name } });
+    response.cookies.set("dailyarc_session", session.value, { ...cookieOptions, maxAge: session.maxAge });
+    return response;
+  } catch (error) {
+    return NextResponse.json({ error: extractErrorMessage(error) }, { status: 400 });
+  }
 }
+
