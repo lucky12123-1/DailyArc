@@ -179,25 +179,38 @@ export default function Home() {
   }, [activeDay, ready]);
   const nav = (id: View, label: string, Icon: typeof LayoutDashboard) => <button onClick={() => { setView(id); setMenuOpen(false); }} className={`nav-item ${view === id ? "active" : ""}`}><Icon size={18} /><span>{label}</span></button>;
 
-function startDay(data: StartForm) {
-    const date = formatDate();
-    const isFirstDay = history.length === 0;
-    setActiveDay({ id: uuid(), date, ...data, tasks: emptyTasks(), schedule: normalizeSchedule(scheduleFromWeeklyPlan(weeklyPlan, date)), deepWork: 0, phone: 0, screenTime: 0, exercise: false, reflection: "", sleepTime: "", startPoints: isFirstDay ? 0 : sleepStartPoints(data.sleep), dailyProgramming: { prompt: "", answer: "", result: "pending" }, goals: resetGoalsForNewDay(permanentGoals) });
-    setEndDayError("");
-    setStartOpen(false);
+  async function startDay(data: StartForm) {
+    try {
+      const res = await apiRequest('/api/workspace', 'POST', { action: "start", wakeTime: data.wakeTime, sleep: data.sleep, targetEnd: "23:00" });
+      if (res?.activeDay) {
+        setActiveDay(res.activeDay);
+      } else {
+        const date = formatDate();
+        const isFirstDay = history.length === 0;
+        setActiveDay({ id: uuid(), date, ...data, tasks: emptyTasks(), schedule: normalizeSchedule(scheduleFromWeeklyPlan(weeklyPlan, date)), deepWork: 0, phone: 0, screenTime: 0, exercise: false, reflection: "", sleepTime: "", startPoints: isFirstDay ? 0 : sleepStartPoints(data.sleep), dailyProgramming: { prompt: "", answer: "", result: "pending" }, goals: resetGoalsForNewDay(permanentGoals) });
+      }
+      setEndDayError("");
+      setStartOpen(false);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Failed to start day");
+    }
   }
 
   async function finishDay() {
-  if (!activeDay) return;
-  try {
-    const data = await apiRequest('/api/workspace', 'POST', { action: "end" });
-    setHistory(data.history);
-    setActiveDay(null);
-    setView("history");
-  } catch (error) {
-    alert("Failed to save day");
+    if (!activeDay) return;
+    try {
+      const data = await apiRequest('/api/workspace', 'POST', { action: "end" });
+      setHistory(data.history || []);
+      setActiveDay(null);
+      setView("history");
+      setEndDayError("");
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Failed to save day";
+      setEndDayError(msg);
+      alert(msg);
+    }
   }
-}
+
 
   if (!ready) return <main className="loading-screen"><ShieldCheck size={24} /><span>Loading your private DailyArc data…</span></main>;
   if (!activeUser) return <AuthScreen />;
