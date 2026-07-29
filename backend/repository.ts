@@ -33,9 +33,11 @@ export async function createUser(name: string, passwordHash: string) {
     .select()
     .single();
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(typeof error === "string" ? error : (error as any)?.message || "Failed to create user profile in database.");
+  if (!profile) throw new Error("Failed to create user profile.");
   return { id: profile.id, name: profile.name, passwordHash } as StoredUser;
 }
+
 
 export async function getUserByName(name: string) {
   const { data, error } = await supabase
