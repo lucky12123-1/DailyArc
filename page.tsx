@@ -32,9 +32,11 @@ async function apiRequest(path: string, method = "GET", body?: unknown) {
     headers: { "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
   });
-  if (!response.ok) throw new Error("Request failed");
-  return response.json();
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(typeof data?.error === "string" ? data.error : "Request failed");
+  return data;
 }
+
 
 
 type View = "dashboard" | "history" | "deepPractice" | "settings";
@@ -218,22 +220,58 @@ function startDay(data: StartForm) {
 
 function FirstUserScreen({ createUser }: { createUser: (name: string, apiKey?: string) => void }) {
   const [name, setName] = useState("");
+  const [password, setPassword] = useState("");
   const [apiKey, setApiKey] = useState("");
-  return <main className="workspace-setup"><section className="workspace-card animate-in"><span className="workspace-mark"><UserPlus size={24} /></span><p className="eyebrow mint-text">DAILYARC PERSONAL WORKSPACE</p><h1>Create your workspace</h1><p>Set up a separate place for your plans, history, and optional OpenAI API key. You can create more users later.</p><form onSubmit={async (event) => { 
-  event.preventDefault(); 
-  if (!name.trim()) return;
-  try {
-    // 1. Register the user in the database
-    await apiRequest('/api/auth/register', 'POST', { name, password: "placeholder_password" });
-    // 2. Log them in
-    await apiRequest('/api/auth/login', 'POST', { name, password: "placeholder_password" });
-    // 3. Reload the page so the dashboard fetches their new account data
-  } catch (error) {
-    alert(error instanceof Error ? error.message : "Failed to create account.");
-  }
 
-}} className="workspace-form"><label>Your name<input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder="Your name" /></label><label>OpenAI API key <small>Optional</small><input type="password" autoComplete="off" spellCheck={false} value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder="sk-…" /></label><div className="truth-callout"><KeyRound size={17} /><span>The key is saved only in this browser for this prototype. You can add or change it in Users & OpenAI later.</span></div><button className="primary-button full" type="submit" disabled={!name.trim()}>Create workspace <ArrowRight size={17} /></button></form></section></main>;
+  return (
+    <main className="workspace-setup">
+      <section className="workspace-card animate-in">
+        <span className="workspace-mark"><UserPlus size={24} /></span>
+        <p className="eyebrow mint-text">DAILYARC PERSONAL WORKSPACE</p>
+        <h1>Create your workspace</h1>
+        <p>Set up a separate place for your plans, history, and optional OpenAI API key. You can create more users later.</p>
+        <form
+          onSubmit={async (event) => { 
+            event.preventDefault(); 
+            if (!name.trim() || password.length < 12) return;
+            try {
+              // 1. Register the user in the database
+              await apiRequest('/api/auth/register', 'POST', { name: name.trim(), password });
+              // 2. Log them in
+              await apiRequest('/api/auth/login', 'POST', { name: name.trim(), password });
+              // 3. Reload page to load workspace data
+              window.location.reload();
+            } catch (error) {
+              alert(error instanceof Error ? error.message : "Failed to create account.");
+            }
+          }}
+          className="workspace-form"
+        >
+          <label>
+            Your name
+            <input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder="Your name" />
+          </label>
+          <label>
+            Password <small>(at least 12 characters)</small>
+            <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Create a password" />
+          </label>
+          <label>
+            OpenAI API key <small>Optional</small>
+            <input type="password" autoComplete="off" spellCheck={false} value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder="sk-…" />
+          </label>
+          <div className="truth-callout">
+            <KeyRound size={17} />
+            <span>Your password is securely hashed and used to protect your personal workspace.</span>
+          </div>
+          <button className="primary-button full" type="submit" disabled={!name.trim() || password.length < 12}>
+            Create workspace <ArrowRight size={17} />
+          </button>
+        </form>
+      </section>
+    </main>
+  );
 }
+
 
 function UserSettings({ activeUser, users, switchUser, createUser, saveAccess }: { activeUser: UserWorkspace; users: UserWorkspace[]; switchUser: (id: string) => void; createUser: (name: string, apiKey?: string) => void; saveAccess: (name: string, apiKey: string) => void }) {
   const [name, setName] = useState(activeUser.name);
